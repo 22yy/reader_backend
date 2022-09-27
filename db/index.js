@@ -36,6 +36,23 @@ function querySql(sql) {
 }
 // conn 对象使用完毕后需要调用 end 进行关闭，否则会导致内存泄露
 
+function queryOne(sql) {
+    return new Promise((resolve, reject) => {
+        querySql(sql)
+            .then(results => {
+                if (results && results.length > 0) {
+                    resolve(results[0])
+                } else {
+                    resolve(null)
+                }
+            })
+            .catch(error => {
+                reject(error)
+            })
+    })
+}
+
 module.exports = {
-    querySql
+    querySql,
+    queryOne
 }
