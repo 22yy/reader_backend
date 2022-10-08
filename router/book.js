@@ -18,7 +18,7 @@ router.post('/upload',
                 // console.log(req.file);
             book.parse()
                 .then(book => {
-                    console.log('book', book);
+                    // console.log('book', book);
                     new Result(book, '电子书上传成功').success(res)
                 })
                 .catch(err => {
