@@ -27,6 +27,7 @@ router.use('/book', bookRouter)
  */
 router.use((req, res, next) => {
     next(boom.notFound('接口不存在'))
+    // next(new Result('接口不存在').fail(res))
 })
 
 /**

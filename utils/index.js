@@ -12,14 +12,19 @@ function decode(req) {
     const authorization = req.get('Authorization')
     let token = ''
     if (authorization.indexOf('Bearer') >= 0) {
-        token = authorization.replace('Bearer ', '')
+        token = authorization.replace('Bearer ', '')//Bearer后有个空格
     } else {
         token = authorization
     }
     return jwt.verify(token, PRIVATE_KEY)
 }
 
+function isObject(o) {
+  return Object.prototype.toString.call(o) === '[object Object]'
+}
+
 module.exports = {
     md5,
-    decode
+    decode,
+    isObject
 }

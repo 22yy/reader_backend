@@ -1,7 +1,8 @@
 const {
     MIME_TYPE_EPUB,
     UPLOAD_URL,
-    UPLOAD_PATH
+    UPLOAD_PATH,
+    OLD_UPLOAD_URL
 } = require('../utils/constant')
 const fs = require('fs')
 const EPub = require('../utils/epub')
@@ -30,7 +31,7 @@ class Book {
         const suffix = mimetype === MIME_TYPE_EPUB ? '.epub' : ''
             // 原有路径
         const oldBookPath = `${des}/${filename}`
-            // 新路径
+            // 新路径,加后缀
         const bookPath = `${des}/${filename}${suffix}`
             // 电子书下载URL链接
         const url = `${UPLOAD_URL}/book/${filename}${suffix}`
@@ -46,9 +47,9 @@ class Book {
             fs.renameSync(oldBookPath, bookPath)
         }
         //book对象
-        this.filename = filename //文件名
+        this.fileName = filename //文件名
         this.path = `/book/${filename}${suffix}` //epub文件相对路径
-        this.originalname = originalname //电子书原名
+        this.originalName = originalname //电子书原名
         this.filePath = this.path
         this.unzipPath = `/unzip/${filename}`
         this.url = url
@@ -65,7 +66,27 @@ class Book {
 
     }
     createFromData(data) {
-
+        // 和数据库字段映射
+       this.fileName = data.fileName
+       this.title = data.title
+       this.author = data.author
+       this.publisher = data.publisher
+       this.cover = data.cover
+       this.coverPath = data.coverPath
+       this.bookId = data.fileName
+       this.language = data.language
+       this.rootFile = data.rootFile
+       this.originalName = data.originalName
+       this.path = data.path || data.filePath
+       this.filePath = data.path || data.filePath
+       this.unzipPath = data.unzipPath
+       this.createUser = data.username
+       this.createDt = new Date().getTime()
+       this.updateDt = new Date().getTime()
+       this.updateType = data.updateType === 0 ? data.updateType : 1
+       this.category = data.category || 99
+       this.categoryText = data.categoryText || '自定义'
+       this.contents = data.contents || []
     }
 
     parse() {
@@ -106,10 +127,10 @@ class Book {
                             reject(err)
                         } else {
                             const suffix = mimeType.split('/')[1]
-                            const coverPath = `${UPLOAD_PATH}/img/${this.filename}.${suffix}`
-                            const coverUrl = `${UPLOAD_URL}/img/${this.filename}.${suffix}`
+                            const coverPath = `${UPLOAD_PATH}/img/${this.fileName}.${suffix}`
+                            const coverUrl = `${UPLOAD_URL}/img/${this.fileName}.${suffix}`
                             fs.writeFileSync(coverPath, imgBuffer, 'binary')
-                            this.coverPath = `/img/${this.filename}.${suffix}`
+                            this.coverPath = `/img/${this.fileName}.${suffix}`
                             this.cover = coverUrl
                             // console.log('cover',cover);
                             resolve(this)
@@ -129,16 +150,9 @@ class Book {
                 }
             })
             epub.parse()
+            this.epub = epub
         })
 
-    }
-
-    static genPath(path) {
-        if (path.startsWith('/')) {
-            return `${UPLOAD_PATH}${path}`
-        } else {
-            return `${UPLOAD_PATH}/${path}`
-        }
     }
     
     // 解压电子书
@@ -200,46 +214,46 @@ class Book {
             const xml = fs.readFileSync(ncxFilePath,'utf-8')
             //toc.ncx所在的文件路径
             const dir = path.dirname(ncxFilePath).replace(UPLOAD_PATH,'')
-            const filename = this.filename
+            const fileName = this.fileName
+            const unzipPath = this.unzipPath
+             // 将ncx文件从xml转为json
             xml2js(
                 xml,//目录信息
                 {
-                    explicitArray:false,
-                    ignoreAttrs:false
+                    explicitArray: false, // 设置为false时，解析结果不会包裹array
+                    ignoreAttrs: false // 解析属性
                 },
                 function(err,json) {
                   if(err) {
                     reject(err)
                   } else {
-                    const navMap = json.ncx.navMap
-                    if(navMap.navPoint && navMap.navPoint.length > 0) {
+                    const navMap = json.ncx.navMap // 获取ncx的navMap属性
+                    if (navMap.navPoint && navMap.navPoint.length > 0) { // 如果navMap属性存在navPoint属性，则说明目录存在
                         navMap.navPoint = findParent(navMap.navPoint)
                         const newNavMap = flatten(navMap.navPoint)
                         // console.log(newNavMap === navMap.navPoint);
                         const chapters = []
                         newNavMap.forEach((chapter,index) => {
-                            const src = chapter.content['$'].src
-                            
-                            chapter.text = `${UPLOAD_URL}${dir}/${src}`
-
-                            chapter.label = chapter.navLabel.text || ''
+                            let src = chapter.content['$'].src
+                            // console.log(chapter);
+                            chapter.id = `${src}`
+                            chapter.href = `${dir}/${src}`.replace(unzipPath,'')
+                            // 发现有的本地测试用的电子书src不规范
+                            if (src.startsWith('Text/OEBPS/')) {
+                              src = src.replace('Text/OEBPS/','')
+                              chapter.text = `${UPLOAD_URL}${dir}/${src}`
+                            } else {
+                              chapter.text = `${UPLOAD_URL}${dir}/${src}`
+                           }
+                            // console.log('dir',dir);
+                            chapter.label = chapter.navLabel.text || ''  
                             chapter.navId = chapter['$'].id
-                            chapter.filename = filename
+                            chapter.fileName = fileName
                             chapter.order = index + 1
                             chapters.push(chapter)
                         })
                         // console.log(chapters);
-                        const chapterTree = []
-                        chapters.forEach(c => {
-                            c.childern = []
-                            if(c.pid === '') {
-                                chapterTree.push(c)
-                            } else {
-                                const parent = chapters.find(_ => _.navId === c.pid)
-                                parent.childern.push(c)
-                            } 
-                        })//变成树状结构
-                        
+                        const chapterTree = Book.genContentsTree(chapters)
                         resolve({chapters,chapterTree})
                     } else {
                        reject(new Error('目录解析失败,目录树为0'))
@@ -251,6 +265,118 @@ class Book {
         throw new Error('目录文件不存在')
       }
    }
+
+   //将book数据与数据库字段映射
+   toDb() {
+    return {
+        title: this.title,
+        cover: this.cover,
+        author: this.author,
+        publisher: this.publisher,
+        bookId: this.bookId,
+        fileName: this.fileName,
+        updateType: this.updateType,
+        language: this.language,
+        rootFile: this.rootFile,
+        originalName: this.originalName,
+        filePath: this.filePath,
+        coverPath: this.coverPath,
+        unzipPath: this.unzipPath,
+        createUser: this.createUser,
+        createDt: this.createDt,
+        updateDt: this.updateDt,
+        category: this.category || 99,
+        categoryText: this.categoryText || '自定义'
+    }
+   }
+   
+//    获取目录
+   getContents() {
+    return this.contents
+   }
+
+//    获得完整的文件路径
+  static genPath(path) {
+      if (path.startsWith('/')) {
+          return `${UPLOAD_PATH}${path}`
+      } else {
+          return `${UPLOAD_PATH}/${path}`
+      }
+  }
+
+//   文件是否存在
+  static pathExists(path) {
+    if(path.startsWith(UPLOAD_PATH)) {
+        return fs.existsSync(path)
+    } else {
+        return fs.existsSync(Book.genPath(path))
+    }
+   }
+
+//    生成contensTree
+static genContentsTree(contents) {
+    const chapterTree = []
+    contents.forEach(c => {
+        c.childern = []
+        if (c.pid === '') {
+            chapterTree.push(c)
+        } else {
+            const parent = contents.find(_ => _.navId === c.pid)
+            parent.childern.push(c)
+        }
+    }) 
+    return chapterTree//变成树状结构
+}
+
+// 获取封面URL
+static genCoverUrl(book) {
+    const { cover } = book
+    console.log('cover',cover);
+    // 老电子书
+    if(+book.updateType === 0) {
+      if(cover) {
+         if (cover.startsWith('/')) {
+             return `${OLD_UPLOAD_URL}${cover}`
+         } else {
+             return `${OLD_UPLOAD_URL}/${cover}`
+         }
+      } else {
+        return null
+      }
+  } else {
+    if(cover) {
+        if(cover.startsWith('/')) {
+          return `${UPLOAD_URL}${cover}`
+        } else {
+          return `${cover}`
+        }
+    } else {
+        return null
+    }
+  }
+}
+   
+//    删除文件夹内的电子书
+reset() {
+    if (this.path && Book.pathExists(this.path)) {
+        fs.unlinkSync(Book.genPath(this.path))
+    }
+    if (this.filePath && Book.pathExists(this.filePath)) {
+        console.log('删除epub文件...');
+        fs.unlinkSync(Book.genPath(this.filePath))
+    }
+    if (this.coverPath && Book.pathExists(this.coverPath)) {
+        console.log('删除封面...');
+        fs.unlinkSync(Book.genPath(this.coverPath))
+    }
+    if (this.unzipPath && Book.pathExists(this.unzipPath)) {
+        console.log('删除文件夹...');
+        // 注意node低版本将不支持第二个属性
+        fs.rmdirSync(Book.genPath(this.unzipPath), {
+            recursive: true
+        })
+    }
+}
 }
 
 module.exports = Book
