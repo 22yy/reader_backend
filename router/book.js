@@ -39,7 +39,7 @@ router.post('/create',
    }
      const book = new Book(null, req.body)
      bookService.insertBook(book).then(()=> {
-       new Result('添加电子书成功').success(res)
+       new Result(book,'添加电子书成功').success(res)
      }).catch(err => {
         console.log('/book/create',err);
         next(boom.badImplementation(err))
@@ -54,14 +54,33 @@ function(req,res,next) {
   if(!fileName) {
    next(boom.badRequest(new Error('参数fileName不能为空')))
   } else {
-    bookService.getBook(fileName).then(book => {
+    bookService.getBook(fileName)
+    .then(book => {
       // console.log('book',book);
       new Result(book,'获取电子书信息成功').success(res)
-    }).catch(err => {
+    })
+    .catch(err => {
       next(boom.badImplementation(err))
     })
   }
   
+})
+
+router.post('/update', 
+function(req, res, next) {
+  const decoded = decode(req)
+  if(decoded && decoded.username) {
+    req.body.username = decoded.username
+  }
+   const book = new Book(null,req.body)
+   bookService.updateBook(book)
+   .then(() => {
+      new Result(book,'更新电子书成功').success(res)
+   })
+   .catch(err => {
+    next(boom.badImplementation(err))
+   })
+
 })
 
 
