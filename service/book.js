@@ -82,6 +82,7 @@ function insertBook(book) {
   }) 
 }
 
+// 获取数据库中的电子书
 function getBook(fileName) {
   return new Promise( async (resolve,reject) => {
     try {
@@ -127,8 +128,25 @@ function updateBook(book) {
   })
 }
 
+// 获取分类
+async function getCategory() {
+ const sql = 'select * from category order by category asc'
+ const result = await db.querySql(sql)
+//  console.log(result);
+ const categoryList = []
+ result.forEach(item => {
+  categoryList.push({
+    label: item.categoryText ,
+    value: item.category,
+    num: item.num
+  })
+ })
+ return categoryList
+}
+
 module.exports = {
   insertBook,
   getBook,
-  updateBook
+  updateBook,
+  getCategory
 }

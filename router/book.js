@@ -9,7 +9,7 @@ const bookService  = require('../service/book')
 
 const router = express.Router()
 
-// 图书上传接口
+// 上传图书
 router.post('/upload',
     multer({ dest: `${UPLOAD_PATH}/book` }).single('file'),
     function(req, res, next) {
@@ -66,6 +66,7 @@ function(req,res,next) {
   
 })
 
+// 更新图书
 router.post('/update', 
 function(req, res, next) {
   const decoded = decode(req)
@@ -82,6 +83,18 @@ function(req, res, next) {
    })
 
 })
+
+// 获取分类
+router.get('/category', 
+function(req, res, next) {
+  bookService.getCategory()
+  .then(category => {
+    new Result(category,'获取分类成功').success(res)
+  })
+  .catch(err => {
+    next(boom.badImplementation(err))
+  })
+}) 
 
 
 module.exports = router
