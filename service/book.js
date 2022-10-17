@@ -1,6 +1,7 @@
 const Book =require('../models/Book')
 const db = require('../db')
 const _ = require('lodash')
+const { debug } = require('../utils/constant')
 
 //判断电子书是否存在
 function exists(book) {
@@ -144,9 +145,60 @@ async function getCategory() {
  return categoryList
 }
 
+//获取电子书列表
+async function listBook(query) {
+  debug && console.log('query',query);
+  const { 
+    category, 
+    author, 
+    title, 
+    page=1, 
+    sort,
+    pageSize=20 } = query
+  const offset= (page - 1)*pageSize
+  let bookSql = 'select * from book'
+  let where = 'where'
+
+  //生成模糊查询sql语句
+  title && (where = db.andLike(where, 'title', title))
+  author && (where = db.andLike(where, 'author', author))
+  category && (where = db.and(where, 'category', category))
+  if (where !== 'where') {
+    bookSql = `${bookSql} ${where}`
+  }
+  // 生成排序sql语句
+  if(sort) {
+    const symbol = sort[0]
+    const column = sort.slice(1,sort.length)
+    const order = symbol === '+' ? 'asc' : 'desc'
+    bookSql = `${bookSql} order by \`${column}\` ${order}`
+  }
+  //limit y offset x 表示: 跳过 x 条数据，读取 y 条数据
+  bookSql = `${bookSql} limit ${pageSize} offset ${offset}`
+
+  // 查询结果的个数
+  let countSql = 'select count(*) as count from book'
+  if(where !== 'where') {
+    countSql = `${countSql} ${where}`
+  }
+  const count = await db.querySql(countSql)
+  
+  debug && console.log('countSql',countSql);
+  debug && console.log('bookSql',bookSql);
+
+  const list =await db.querySql(bookSql)
+  
+  // 生成完整的封面路径
+  list.forEach(book => book.cover = Book.genCoverUrl(book))
+
+  return {list, count:count[0].count, page, pageSize}
+  // async函数返回的内容会自动转换为promise
+}
+
 module.exports = {
   insertBook,
   getBook,
   updateBook,
-  getCategory
+  getCategory,
+  listBook
 }

@@ -96,5 +96,19 @@ function(req, res, next) {
   })
 }) 
 
+// 获取电子书列表
+router.get('/list',
+function(req, res, next) {
+  bookService.listBook(req.query)
+  .then(({list, count, page, pageSize}) => {
+    // 将page和pageSize转换为数字
+    new Result({list, count, page: +page, pageSize: +pageSize},'获取图书列表成功').success(res)
+    
+  })
+  .catch(err => {
+    console.log('/book/list',err);
+    next(boom.badImplementation(err))
+  })
+})
 
 module.exports = router
