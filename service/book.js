@@ -13,7 +13,6 @@ function exists(book) {
 // 移除电子书 
 async function removeBook(book) {
  if(book) {
-  console.log(book.fileName,book.author,book.bookId,book.title);
   // 删除文件夹内的电子书
   book.reset()
   // 删除数据库内的电子书
@@ -162,7 +161,7 @@ async function listBook(query) {
   //生成模糊查询sql语句
   title && (where = db.andLike(where, 'title', title))
   author && (where = db.andLike(where, 'author', author))
-  category && (where = db.and(where, 'category', category))
+  category && (where = db.and(where, 'categoryText', category))
   if (where !== 'where') {
     bookSql = `${bookSql} ${where}`
   }
@@ -195,10 +194,33 @@ async function listBook(query) {
   // async函数返回的内容会自动转换为promise
 }
 
+//删除电子书
+function deleteBook(fileName) {
+  return new Promise( async (resolve, reject) => {
+    let book = await getBook(fileName)
+    if(book) {
+      if(+book.updateType === 0) {
+        reject(new Error('内置电子书不能删除'))
+      } else {
+        const bookObj = new Book(null, book)
+        const sql = `delete from book where fileName='${fileName}'`
+        debug && console.log('deleteSql',sql);
+        db.querySql(sql).then(() => {
+          bookObj.reset()
+          resolve()
+        })
+      }
+    } else {
+      reject(new Error('电子书不存在'))
+    }
+  })
+}
+
 module.exports = {
   insertBook,
   getBook,
   updateBook,
   getCategory,
-  listBook
+  listBook,
+  deleteBook
 }

@@ -60,6 +60,7 @@ function(req,res,next) {
       new Result(book,'获取电子书信息成功').success(res)
     })
     .catch(err => {
+      console.log('/book/delete',err);
       next(boom.badImplementation(err))
     })
   }
@@ -109,6 +110,22 @@ function(req, res, next) {
     console.log('/book/list',err);
     next(boom.badImplementation(err))
   })
+})
+
+router.get('/delete',
+function(req, res, next) {
+  const { fileName } = req.query
+  if(!fileName) {
+    next(boom.badRequest(new Error('参数fileName不能为空')))
+  } else {
+    bookService.deleteBook(fileName)
+    .then(() => {
+      new Result('删除图书成功').success(res)
+    })
+    .catch(err => {
+      next(boom.badImplementation(err))
+    })
+  }
 })
 
 module.exports = router

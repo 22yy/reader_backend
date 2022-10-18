@@ -331,7 +331,7 @@ static genContentsTree(contents) {
 // 获取封面URL
 static genCoverUrl(book) {
     const { cover } = book
-    console.log('cover',cover);
+    // console.log('cover',cover);
     // 老电子书
     if(+book.updateType === 0) {
       if(cover) {
